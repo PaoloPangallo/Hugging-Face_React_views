@@ -1,0 +1,20 @@
+.entity-PER {
+    background: #3b82f6;
+    color: white;
+    padding: 2px 4px;
+    border-radius: 4px;
+}
+
+.entity-LOC {
+    background: #10b981;
+    color: white;
+    padding: 2px 4px;
+    border-radius: 4px;
+}
+
+.entity-ORG {
+    background: #f59e0b;
+    color: white;
+    padding: 2px 4px;
+    border-radius: 4px;
+}

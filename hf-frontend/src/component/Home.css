@@ -1,0 +1,16 @@
+/* ==================== HOME PAGE ==================== */
+.home {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--neutral-light);
+}
+
+.home > * {
+  flex-shrink: 0;
+}
+
+/* ==================== ENSURE FOOTER STAYS AT BOTTOM ==================== */
+.home > footer {
+  margin-top: auto;
+}

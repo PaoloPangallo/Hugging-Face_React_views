@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <title>NER App</title>
+
+    <!-- Tailwind + DaisyUI -->
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.css" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body class="bg-base-200 min-h-screen">
+
+    <div class="navbar bg-base-100 shadow">
+        <div class="flex-1">
+            <a class="btn btn-ghost normal-case text-xl">NER Demo</a>
+        </div>
+    </div>
+
+    <div class="container mx-auto max-w-3xl mt-10">
+        <div class="card bg-base-100 shadow-xl p-6">
+            <h1 class="text-3xl font-bold mb-4">Named Entity Recognition</h1>
+
+            <textarea id="inputText"
+                      class="textarea textarea-bordered w-full h-32 mb-4"
+                      placeholder="Scrivi un testo da analizzare…"></textarea>
+
+            <button onclick="analyzeText()"
+                    class="btn btn-primary w-full">
+                Analizza
+            </button>
+
+            <div id="output" class="mt-6 text-lg leading-relaxed"></div>
+        </div>
+    </div>
+
+    <script>
+        const COLOR_MAP = {
+            PERSON: "bg-red-300",
+            ORG: "bg-green-300",
+            LOC: "bg-blue-300",
+            MISC: "bg-yellow-300"
+        };
+
+        async function analyzeText() {
+            const text = document.getElementById("inputText").value;
+
+            const res = await fetch("/predict", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ text })
+            });
+
+            const data = await res.json();
+            const entities = data.entities;
+
+            let html = "";
+            let current = 0;
+
+            for (const ent of entities) {
+                html += text.slice(current, ent.start);
+                const cls = COLOR_MAP[ent.label] || "bg-purple-300";
+                html += `<span class="px-1 rounded ${cls}">${text.slice(ent.start, ent.end)}</span>`;
+                current = ent.end;
+            }
+            html += text.slice(current);
+
+            document.getElementById("output").innerHTML = html;
+        }
+    </script>
+
+</body>
+</html>
