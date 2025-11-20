@@ -1,55 +1,128 @@
+# app/main.py
+
+import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from .config import settings
-from .models import TextRequest, PredictResponse
-from .registry import HFModelRegistry, MODEL_CONFIGS
-from .utils import to_serializable
+from typing import List, Dict, Any
 
-app = FastAPI(title="HF Model Gateway")
+from .registry import registry
+from .models import PredictionInput, PredictionOutput
 
-# CORS per React
+
+print("[MAIN] Importing main.py ...")
+
+
+# ============================================================
+# CREAZIONE APP FASTAPI
+# ============================================================
+
+app = FastAPI(
+    title="AI Model Hub",
+    description="Backend modulare per inferenza NLP (Sentiment, NER, Emotion).",
+    version="1.0.0",
+)
+
+print("[MAIN] FastAPI instance created.")
+
+
+# ============================================================
+# CONFIGURAZIONE CORS
+# ============================================================
+
+ALLOWED_ORIGINS = ["*"]  # Cambia in produzione
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_origins,
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-registry = HFModelRegistry(hf_token=settings.hf_token)
+print(f"[MAIN] CORS configured for origins: {ALLOWED_ORIGINS}")
 
 
-@app.get("/api/models")
-def list_models():
-    return [
-        {
-            "key": key,
-            "name": conf.name,
-            "task": conf.task,
-            "model_id": conf.model_id,
-        }
-        for key, conf in MODEL_CONFIGS.items()
-    ]
+# ============================================================
+# EVENTO DI STARTUP
+# ============================================================
+
+@app.on_event("startup")
+async def startup_event():
+    print("[MAIN] Startup event fired.")
+    print("[MAIN] Calling registry.initialize_models() ...")
+    registry.initialize_models()
+
+    print("[MAIN] Registry initialization complete.")
+    print("[MAIN] Models available:", registry.get_model_info())
 
 
+# ============================================================
+# GET /api/models
+# ============================================================
 
-@app.post("/api/predict/{model_name}", response_model=PredictResponse)
-def predict(model_name: str, req: TextRequest):
+@app.get("/api/models", response_model=List[Dict[str, Any]])
+async def list_models():
+    print("[ENDPOINT] GET /api/models called.")
+
+    models = registry.get_model_info()
+
+    if not models:
+        print("[ENDPOINT WARNING] No models found in registry!")
+    else:
+        print(f"[ENDPOINT] Returning {len(models)} models.")
+
+    return models
+
+
+# ============================================================
+# POST /api/predict/{model_key}
+# ============================================================
+
+@app.post("/api/predict/{model_key}", response_model=PredictionOutput)
+async def predict_endpoint(model_key: str, data: PredictionInput):
+    print(f"[ENDPOINT] POST /api/predict/{model_key}")
+
+    model = registry.get_model(model_key)
+
+    if not model:
+        print(f"[ERROR] Model with key '{model_key}' not found in registry.")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Modello '{model_key}' non trovato."
+        )
+
+    print(f"[ENDPOINT] Using model: {model.key} → {model.model_id}")
+
     try:
-        pipe = registry.get_pipeline(model_name)
-        conf = registry.get_config(model_name)
-    except KeyError:
-        raise HTTPException(status_code=404, detail=f"Modello '{model_name}' non trovato")
+        result: PredictionOutput = model.predict(data)
+        print(f"[ENDPOINT] Prediction successful. Returning result for {model.key}")
+        return result
 
-    try:
-        raw_output = pipe(req.text)
-        serializable_output = to_serializable(raw_output)   # <── FIX QUI
+    except RuntimeError as e:
+        print(f"[RUNTIME ERROR] {e}")
+        raise HTTPException(
+            status_code=503,
+            detail=f"Il modello '{model_key}' non è inizializzato oppure non è pronto.",
+        )
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"[INFERENCE ERROR] Errore durante la predizione: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Errore interno durante la predizione."
+        )
 
-    return PredictResponse(
-        model_name=model_name,
-        task=conf.task,
-        output=serializable_output,
+
+# ============================================================
+# AVVIO STANDALONE
+# ============================================================
+
+if __name__ == "__main__":
+    print("[MAIN] Starting with Uvicorn...")
+    uvicorn.run(
+        "app.main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True
     )
